@@ -109,6 +109,13 @@ pub fn initialize_nt_offsets() -> anyhow::Result<()> {
                 0x05,
             ),
 
+            /* Win 11 25H2 26200.7462 */
+            Signature::offset(
+                obfstr!("_EPROCESS.ThreadListHead (26200.7462)"),
+                obfstr!("4C 8D B1 ? ? ? ? 48 8B F2"),
+                0x03,
+            ),
+            
             /* Windows 10 19045.4046 */
             Signature::relative_address(
                 obfstr!("PsGetNextProcess (19045.4046)"),
