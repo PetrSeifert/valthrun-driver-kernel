@@ -4,23 +4,20 @@ if (-not (Test-Path -Path $Target)) {
     exit 1
 }
 
-$ErrorActionPreference = "SilentlyContinue"
-$WDK = $(Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots\' -Name 'KitsRoot10' -ErrorAction SilentlyContinue)
-$ErrorActionPreference = "Continue"
-if ([string]::IsNullOrEmpty($WDK)) {
-    Write-Host "Missing WDK path"
-    exit 1
+$commands = "makecert.exe", "signtool.exe"
+$missing = $commands | Where-Object {
+    -not (Get-Command $_ -ErrorAction SilentlyContinue)
 }
 
-$WDKBin = "$WDK\bin\10.0.22621.0\x64\"
-if (-not (Test-Path -Path $WDKBin)) {
-    Write-Host "Missing Windows kit for 10.0.22621.0"
+if ($missing) {
+    Write-Host "Missing commands: $($missing -join ', ')"
+    Write-Host "You may not be running inside a VS Developer Shell."
     exit 1
 }
 
 if (-not (Test-Path "$PSScriptRoot\DriverCertificate.cer")) {
     Write-Host "Generating new certificate"
-    & "$WDKBin\makecert.exe" -r -pe -ss PrivateCertStore -n CN=DriverCertificate $PSScriptRoot\DriverCertificate.cer
+    & makecert.exe -r -pe -ss PrivateCertStore -n CN=DriverCertificate $PSScriptRoot\DriverCertificate.cer
     if (-not $?) {
         Write-Host "Failed to generate certificate"
         exit 1
@@ -31,7 +28,7 @@ else {
 }
 
 Write-Host "Signing"
-& "$WDKBin\signtool.exe" sign /a /v /s PrivateCertStore /n DriverCertificate /t http://timestamp.digicert.com /fd SHA256 $Target
+signtool.exe sign /a /v /s PrivateCertStore /n DriverCertificate /t http://timestamp.digicert.com /fd SHA256 $Target
 if (-not $?) {
     Write-Host "Failed to sign target"
     exit 1
