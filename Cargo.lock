@@ -363,7 +363,7 @@ dependencies = [
 
 [[package]]
 name = "driver"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -397,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "driver-interface-kernel"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "driver-standalone"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "anyhow",
  "compiler_builtins",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "driver-uefi"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "anyhow",
  "bindgen 0.69.4",
