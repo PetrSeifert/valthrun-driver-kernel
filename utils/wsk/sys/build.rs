@@ -1,5 +1,9 @@
 use std::{
-    env::var,
+    env::{
+        self,
+        var,
+    },
+    ffi::OsStr,
     fs::File,
     io::Write,
     path::{
@@ -11,21 +15,87 @@ use std::{
 use anyhow::Context;
 use winreg::{
     enums::*,
+    types::FromRegValue,
     RegKey,
+    HKEY,
 };
 
+fn read_registry_value<T: FromRegValue>(
+    hkey: HKEY,
+    path: impl AsRef<OsStr>,
+    name: impl AsRef<OsStr>,
+) -> Option<T> {
+    let hkey = RegKey::predef(hkey);
+    let value = hkey.open_subkey(path).ok()?.get_value(name).ok()?;
+
+    Some(value)
+}
+
 fn get_windows_kits_dir() -> anyhow::Result<PathBuf> {
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    if let Ok(wdk_content_root) = env::var("WDKContentRoot") {
+        let path = Path::new(wdk_content_root.as_str());
+        if path.is_dir() {
+            return Ok(path.to_path_buf());
+        }
+        eprintln!(
+            "WDKContentRoot was detected to be {}, but does not exist or is not a valid directory.",
+            path.display()
+        );
+    }
 
-    let key = r"SOFTWARE\Microsoft\Windows Kits\Installed Roots";
+    if let Ok(microsoft_kit_root) = env::var("MicrosoftKitRoot") {
+        let path = Path::new(microsoft_kit_root.as_str());
 
-    let dir: String = hklm.open_subkey(key)?.get_value("KitsRoot10")?;
+        if !path.is_absolute() {
+            eprintln!(
+                "MicrosoftKitRoot({}) was found in environment, but is not an absolute path.",
+                path.display()
+            );
+        } else if !path.is_dir() {
+            eprintln!(
+                "MicrosoftKitRoot({}) was found in environment, but does not exist or is not a \
+                 valid directory.",
+                path.display()
+            );
+        } else {
+            let wdk_kit_version = env::var("WDKKitVersion").unwrap_or_else(|_| "10.0".to_string());
+            let path = path.join("Windows Kits").join(wdk_kit_version);
+            if path.is_dir() {
+                return Ok(path);
+            }
+            eprintln!(
+                "WDKContentRoot was detected to be {}, but does not exist or is not a valid \
+                 directory.",
+                path.display()
+            );
+        }
+    }
 
-    Ok(dir.into())
+    if let Some(path) = read_registry_value::<String>(
+        HKEY_LOCAL_MACHINE,
+        r"SOFTWARE\Microsoft\Windows Kits\Installed Roots",
+        r"KitsRoot10",
+    ) {
+        return Ok(Path::new(path.as_str()).to_path_buf());
+    }
+
+    if let Some(path) = read_registry_value::<String>(
+        HKEY_LOCAL_MACHINE,
+        r"SOFTWARE\Wow6432Node\Microsoft\Windows Kits\Installed Roots",
+        r"KitsRoot10",
+    ) {
+        return Ok(Path::new(path.as_str()).to_path_buf());
+    }
+
+    anyhow::bail!("No valid Windows Kit found");
 }
 
 fn get_km_dirs(windows_kits_dir: &PathBuf) -> anyhow::Result<(PathBuf, PathBuf)> {
-    let readdir = Path::new(windows_kits_dir).join("lib").read_dir()?;
+    let libdir = Path::new(windows_kits_dir).join("lib");
+
+    let readdir = libdir
+        .read_dir()
+        .context(format!("Failed to read lib dir at {}", libdir.display()))?;
 
     let max_libdir = readdir
         .filter_map(|dir| dir.ok())
@@ -99,8 +169,8 @@ fn generate_bindings(include_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let windows_kits_dir = get_windows_kits_dir().unwrap();
-    let (km_lib, km_include) = get_km_dirs(&windows_kits_dir).unwrap();
+    let windows_kits_dir = get_windows_kits_dir().context("Failed to get Windows kits dir")?;
+    let (km_lib, km_include) = get_km_dirs(&windows_kits_dir).context("Failed to get km dirs")?;
 
     generate_bindings(&km_include)?;
 
